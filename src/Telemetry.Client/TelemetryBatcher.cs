@@ -53,3 +53,4 @@ public sealed class TelemetryBatcher
 }
 
 public sealed record TelemetryEvent(string Name, IReadOnlyDictionary<string, string> Properties);
+// demo PR: touch Telemetry.Client for impacted-targets.yml
