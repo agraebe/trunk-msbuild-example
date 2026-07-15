@@ -60,6 +60,12 @@ public sealed class TrunkApiClient
             throw new InvalidOperationException(
                 $"Trunk API returned {(int)response.StatusCode} {response.StatusCode}: {body}");
         }
+
+        // Trunk returns 2xx even when it accepts the payload but can't fully act on
+        // it (e.g. a repo/org mismatch it silently no-ops on) — log the body so a
+        // "why isn't this showing up in the queue" investigation doesn't have to
+        // guess blind from a bare success exit code.
+        Console.Error.WriteLine($"Trunk responded {(int)response.StatusCode}: {body}");
     }
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
