@@ -46,14 +46,15 @@ try
     {
         Console.Error.WriteLine(
             "Missing required Trunk/GitHub environment variables for a live POST. " +
-            "Re-run with --dry-run, or set TRUNK_API_TOKEN, TRUNK_REPO_OWNER/TRUNK_REPO_NAME " +
-            "(or GITHUB_REPOSITORY), TRUNK_PR_NUMBER, TRUNK_PR_SHA (or GITHUB_SHA), and " +
+            "Re-run with --dry-run, or set TRUNK_API_TOKEN (or TRUNK_FORKED_WORKFLOW_RUN_ID " +
+            "for forked PRs), TRUNK_REPO_OWNER/TRUNK_REPO_NAME (or GITHUB_REPOSITORY), " +
+            "TRUNK_PR_NUMBER, TRUNK_PR_SHA (or GITHUB_SHA), and " +
             "TRUNK_TARGET_BRANCH (or GITHUB_BASE_REF).");
         return 1;
     }
 
     using var httpClient = new HttpClient();
-    var apiClient = new TrunkApiClient(httpClient, env.ApiToken);
+    var apiClient = new TrunkApiClient(httpClient, env.Auth);
     await apiClient.PostImpactedTargetsAsync(env.Repo, env.PullRequest, env.TargetBranch, result, CancellationToken.None);
     Console.Error.WriteLine("Posted impacted targets to Trunk.");
 

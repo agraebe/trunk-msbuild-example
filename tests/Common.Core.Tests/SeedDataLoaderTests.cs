@@ -34,7 +34,7 @@ public class SeedDataLoaderTests
     public void LoadRegions_ExactlyOneIsDefaultForNewCustomers()
     {
         var regions = _loader.LoadRegions();
-        Assert.Single(regions.Where(r => r.DefaultForNewCustomers));
+        Assert.Single(regions, r => r.DefaultForNewCustomers);
     }
 
     [Fact]

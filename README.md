@@ -175,7 +175,8 @@ workflow doesn't have to redundantly wire them up:
 
 | Variable | Falls back to | Purpose |
 |---|---|---|
-| `TRUNK_API_TOKEN` | — | org API token, sent as the `x-api-token` header |
+| `TRUNK_API_TOKEN` | — | org API token, sent as the `x-api-token` header (non-forked PRs) |
+| `TRUNK_FORKED_WORKFLOW_RUN_ID` | — | forked-PR alternative to the token, sent as `x-forked-workflow-run-id`; set one or the other, not both |
 | `TRUNK_REPO_OWNER` / `TRUNK_REPO_NAME` | parsed from `GITHUB_REPOSITORY` | repo identity |
 | `TRUNK_REPO_HOST` | `github.com` | repo identity |
 | `TRUNK_PR_NUMBER` | — | PR number |

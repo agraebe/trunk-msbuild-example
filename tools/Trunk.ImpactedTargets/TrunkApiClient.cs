@@ -12,12 +12,12 @@ public sealed record PullRequestIdentity(int Number, string Sha);
 public sealed class TrunkApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly string _apiToken;
+    private readonly TrunkAuth _auth;
 
-    public TrunkApiClient(HttpClient httpClient, string apiToken)
+    public TrunkApiClient(HttpClient httpClient, TrunkAuth auth)
     {
         _httpClient = httpClient;
-        _apiToken = apiToken;
+        _auth = auth;
     }
 
     public async Task PostImpactedTargetsAsync(
@@ -39,7 +39,18 @@ public sealed class TrunkApiClient
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json"),
         };
-        request.Headers.Add(TrunkApiConstants.ApiTokenHeader, _apiToken);
+        if (_auth.ApiToken is not null)
+        {
+            request.Headers.Add(TrunkApiConstants.ApiTokenHeader, _auth.ApiToken);
+        }
+        else if (_auth.ForkedWorkflowRunId is not null)
+        {
+            request.Headers.Add(TrunkApiConstants.ForkedWorkflowRunIdHeader, _auth.ForkedWorkflowRunId);
+        }
+        else
+        {
+            throw new InvalidOperationException("TrunkAuth has neither an API token nor a forked-workflow-run-id.");
+        }
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);

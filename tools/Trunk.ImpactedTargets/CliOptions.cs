@@ -76,7 +76,12 @@ public sealed class CliOptions
               --dry-run          Print the impacted-targets JSON but skip the POST to Trunk.
 
             Environment variables (required unless --dry-run):
-              TRUNK_API_TOKEN     Trunk organization API token.
+              TRUNK_API_TOKEN     Trunk organization API token. Use this OR the
+                                  forked-PR variable below, not both.
+              TRUNK_FORKED_WORKFLOW_RUN_ID
+                                  Forked-PR alternative to TRUNK_API_TOKEN, per
+                                  Trunk's docs (a fork's workflow run can't hold
+                                  an org secret). Typically ${{ github.run_id }}.
               TRUNK_REPO_OWNER    GitHub repo owner. Falls back to parsing GITHUB_REPOSITORY.
               TRUNK_REPO_NAME     GitHub repo name.  Falls back to parsing GITHUB_REPOSITORY.
               TRUNK_REPO_HOST     Defaults to "github.com".
