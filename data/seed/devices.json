@@ -1,6 +1,32 @@
 [
-  { "id": "dev-1001", "customerId": "cust-001", "platform": "Windows", "compliant": true },
-  { "id": "dev-1002", "customerId": "cust-001", "platform": "macOS", "compliant": true },
-  { "id": "dev-1003", "customerId": "cust-002", "platform": "Windows", "compliant": false },
-  { "id": "dev-1004", "customerId": "cust-003", "platform": "Linux", "compliant": true }
+  {
+    "id": "dev-1001",
+    "customerId": "cust-001",
+    "platform": "Windows",
+    "compliant": true
+  },
+  {
+    "id": "dev-1002",
+    "customerId": "cust-001",
+    "platform": "macOS",
+    "compliant": true
+  },
+  {
+    "id": "dev-1003",
+    "customerId": "cust-002",
+    "platform": "Windows",
+    "compliant": false
+  },
+  {
+    "id": "dev-1004",
+    "customerId": "cust-003",
+    "platform": "Linux",
+    "compliant": true
+  },
+  {
+    "id": "dev-2001",
+    "customerId": "cust-003",
+    "platform": "Linux",
+    "compliant": true
+  }
 ]
