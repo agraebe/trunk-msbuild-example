@@ -45,3 +45,4 @@ public sealed class JsonFileFeatureFlagProvider : IFeatureFlagProvider
         return customerId is not null && definition.EnabledForCustomerIds.Contains(customerId);
     }
 }
+// demo PR: touch Common.FeatureFlags for impacted-targets.yml (money shot)
