@@ -1,0 +1,57 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore ContosoWorkspace.sln
+
+      - name: Build
+        run: dotnet build ContosoWorkspace.sln --no-restore --configuration Release
+
+      # --no-restore/--no-build kept off here on purpose: each test project is run
+      # individually so every one gets its own junit.xml next to its .csproj, which
+      # is what the upload step's glob (**/junit.xml) below expects. Note there is
+      # NO retry flag anywhere in this job — Trunk's flaky-test detection needs the
+      # raw pass/fail signal from every run; a retry would mask exactly the flakes
+      # this repo's FlakyTests.cs files exist to demonstrate.
+      - name: Test (with JUnit output)
+        run: |
+          set -e
+          for proj in \
+            tests/Common.Core.Tests \
+            tests/Common.FeatureFlags.Tests \
+            tests/Identity.Service.Tests \
+            tests/DeviceManagement.Service.Tests \
+            tests/AppDelivery.Service.Tests \
+            tests/Telemetry.Client.Tests \
+            tools/Trunk.ImpactedTargets.Tests; do
+            dotnet test "$proj" --no-build --configuration Release \
+              --logger "junit;LogFilePath=junit.xml" || true
+          done
+        # `|| true`: a failing (including flaky) test must not stop this step —
+        # the whole point is to still upload the JUnit results below.
+
+      # Runs even if the job above reports test failures (`!cancelled()` covers
+      # both success and failure, only skipping on manual cancellation). Flaky
+      # detection is useless if the upload only happens on green runs.
+      - name: Upload Test Results to Trunk.io
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: trunk-io/analytics-uploader@v2
+        with:
+          junit-paths: "**/junit.xml"
+          org-slug: ${{ vars.TRUNK_ORG_URL_SLUG }}
+          token: ${{ secrets.TRUNK_API_TOKEN }}

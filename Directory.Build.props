@@ -1,0 +1,33 @@
+<Project>
+
+  <!--
+    Shared settings for every project in the monorepo. This is the file an enterprise
+    reviewer looks for first: one place that pins the target framework, language
+    version, and warning behavior for ~10 projects instead of repeating it per-csproj.
+
+    NOTE for the impacted-targets tool: this file is "build infrastructure". A change
+    here can alter how *every* project compiles, so Trunk.ImpactedTargets treats edits
+    to this file as impacting ALL targets rather than trying to be clever about it.
+    See tools/Trunk.ImpactedTargets/PathRules.cs.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <Deterministic>true</Deterministic>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Contoso Workspace is a fictional enterprise workspace-software company.
+         Any resemblance to real products is coincidental. -->
+    <Company>Contoso Workspace</Company>
+    <Product>Contoso Workspace Platform</Product>
+  </PropertyGroup>
+
+</Project>

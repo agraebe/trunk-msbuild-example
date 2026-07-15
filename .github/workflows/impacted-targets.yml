@@ -1,0 +1,32 @@
+name: impacted-targets
+
+on:
+  pull_request:
+
+jobs:
+  compute-impacted-targets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 pulls full history, not just the merge commit. The tool
+          # runs `git diff <base>...<head>` and needs the real merge-base between
+          # the PR branch and the target branch — a shallow checkout (GitHub
+          # Actions' default) doesn't have enough history for that to resolve,
+          # and silently diffing against the wrong commit is exactly the kind of
+          # wrong-but-quiet answer this tool is built to avoid.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Compute impacted targets
+        env:
+          TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
+          TRUNK_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          dotnet run --project tools/Trunk.ImpactedTargets -- \
+            --base "origin/${{ github.base_ref }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            --repo-root "${{ github.workspace }}"

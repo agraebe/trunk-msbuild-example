@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Common.Core\Common.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="flags.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

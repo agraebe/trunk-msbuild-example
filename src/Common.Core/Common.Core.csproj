@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- Ship the seed data alongside the assembly so SeedDataLoader can find it at
+         runtime without any environment-specific path assumptions. -->
+    <None Include="..\..\data\seed\*.json" Link="seed\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Trunk.ImpactedTargets</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Microsoft.Build.Locator must be referenced (and MSBuildLocator.RegisterDefaults()
+      called before any Microsoft.Build.* type is touched) because a standalone console
+      app has no idea which MSBuild/SDK install to bind to. Without this, loading
+      Microsoft.Build.Graph.ProjectGraph throws a FileNotFoundException the first time
+      it tries to resolve Microsoft.Build.dll — the #1 gotcha with this API outside of
+      running inside `dotnet build`/MSBuild.exe itself. See Program.cs.
+    -->
+    <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
+    <PackageReference Include="Microsoft.Build" Version="17.11.48" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.11.48" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+</Project>

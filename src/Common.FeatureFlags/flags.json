@@ -1,0 +1,14 @@
+{
+  "new-device-onboarding-flow": {
+    "enabled": true,
+    "enabledForCustomerIds": []
+  },
+  "identity-mfa-required": {
+    "enabled": false,
+    "enabledForCustomerIds": ["cust-001", "cust-003"]
+  },
+  "app-delivery-staged-rollout": {
+    "enabled": true,
+    "enabledForCustomerIds": []
+  }
+}
