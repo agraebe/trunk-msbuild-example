@@ -7,6 +7,11 @@ name: query-trunk-queue
 # inspect current queue/lane state without opening the Trunk dashboard.
 on:
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to query with getSubmittedPullRequest (leave blank to skip)"
+        required: false
+        type: string
 
 jobs:
   query-queue:
@@ -16,13 +21,14 @@ jobs:
         env:
           TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
           TRUNK_ORG_URL_SLUG: ${{ vars.TRUNK_ORG_URL_SLUG }}
+          PR_NUMBER: ${{ inputs.pr_number }}
         run: |
           echo "## getQueue"
           curl -s -X POST "https://api.trunk.io:443/v1/getQueue" \
             -H "Content-Type: application/json" \
             -H "x-api-token: ${TRUNK_API_TOKEN}" \
             -d '{"repo": {"host": "github.com", "owner": "agraebe", "name": "trunk-msbuild-example"}, "targetBranch": "main"}' \
-            | tee /tmp/getQueue.json | python3 -m json.tool
+            | python3 -m json.tool || true
 
           echo
           echo "## getMergeQueueTestingDetails"
@@ -30,4 +36,14 @@ jobs:
             -H "Content-Type: application/json" \
             -H "x-api-token: ${TRUNK_API_TOKEN}" \
             -d '{"repo": {"host": "github.com", "owner": "agraebe", "name": "trunk-msbuild-example"}, "targetBranch": "main"}' \
-            | tee /tmp/getMergeQueueTestingDetails.json | python3 -m json.tool
+            | python3 -m json.tool || true
+
+          if [ -n "${PR_NUMBER}" ]; then
+            echo
+            echo "## getSubmittedPullRequest (PR #${PR_NUMBER})"
+            curl -s -X POST "https://api.trunk.io:443/v1/getSubmittedPullRequest" \
+              -H "Content-Type: application/json" \
+              -H "x-api-token: ${TRUNK_API_TOKEN}" \
+              -d "{\"repo\": {\"host\": \"github.com\", \"owner\": \"agraebe\", \"name\": \"trunk-msbuild-example\"}, \"targetBranch\": \"main\", \"pr\": {\"number\": ${PR_NUMBER}}}" \
+              | python3 -m json.tool || true
+          fi
