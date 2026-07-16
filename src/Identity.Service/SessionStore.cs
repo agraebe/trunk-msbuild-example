@@ -28,3 +28,4 @@ public sealed class SessionStore
         return _clock.UtcNow - issuedAt < ttl;
     }
 }
+// Stress 06: Identity.Service tweak (1784238740240209000)
