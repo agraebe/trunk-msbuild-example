@@ -51,3 +51,4 @@ public enum RolloutStrategy
 }
 
 public sealed record RolloutRecord(string CustomerId, string AppVersion, RolloutStrategy Strategy);
+// Stress 09: AppDelivery.Service tweak (1784238740434424000)
