@@ -35,3 +35,4 @@ public class PathRulesTests
         Assert.False(PathRules.IsBuildInfrastructurePath("src/Identity.Service/IdentityVerifier.cs"));
     }
 }
+// Stress 18: tool's own test project (isolated lane) (1784238741039551000)
