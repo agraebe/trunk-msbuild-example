@@ -1,6 +1,22 @@
 [
-  { "code": "us-east", "displayName": "US East", "defaultForNewCustomers": true },
-  { "code": "eu-west", "displayName": "EU West", "defaultForNewCustomers": false },
-  { "code": "ap-south", "displayName": "AP South", "defaultForNewCustomers": false }
+  {
+    "code": "us-east",
+    "displayName": "US East",
+    "defaultForNewCustomers": true
+  },
+  {
+    "code": "eu-west",
+    "displayName": "EU West",
+    "defaultForNewCustomers": false
+  },
+  {
+    "code": "ap-south",
+    "displayName": "AP South",
+    "defaultForNewCustomers": false
+  },
+  {
+    "code": "stress-test",
+    "displayName": "Stress Test Region",
+    "defaultForNewCustomers": false
+  }
 ]
-// Stress 14: seed data tweak (custom path rule) (1784238740775292000)
