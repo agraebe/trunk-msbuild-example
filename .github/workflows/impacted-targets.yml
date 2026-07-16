@@ -25,6 +25,14 @@ jobs:
         env:
           TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
           TRUNK_PR_NUMBER: ${{ github.event.pull_request.number }}
+          # GITHUB_SHA (this job's default fallback for pr.sha) is the *merge commit*
+          # for pull_request events (refs/pull/N/merge), not the PR branch's real head
+          # commit — GitHub Actions sets it that way for every pull_request-triggered
+          # job. Trunk's merge-queue readiness check keys uploaded impacted targets to
+          # the PR's actual head SHA, so uploading under the merge-commit SHA silently
+          # never matches anything. Pin TRUNK_PR_SHA explicitly to the same head SHA
+          # already used for --head below, so the diff and the upload agree.
+          TRUNK_PR_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           dotnet run --project tools/Trunk.ImpactedTargets -- \
             --base "origin/${{ github.base_ref }}" \

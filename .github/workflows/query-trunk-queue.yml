@@ -1,0 +1,49 @@
+name: query-trunk-queue
+
+# Manual diagnostic workflow: calls Trunk's read-only Merge Queue API
+# (getQueue, getMergeQueueTestingDetails) using the already-configured
+# TRUNK_API_TOKEN secret, so the token is never handled outside of GitHub's
+# secret store. Not part of the CI pipeline — trigger by hand when you want to
+# inspect current queue/lane state without opening the Trunk dashboard.
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to query with getSubmittedPullRequest (leave blank to skip)"
+        required: false
+        type: string
+
+jobs:
+  query-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get queue state
+        env:
+          TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
+          TRUNK_ORG_URL_SLUG: ${{ vars.TRUNK_ORG_URL_SLUG }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          echo "## getQueue"
+          curl -s -X POST "https://api.trunk.io:443/v1/getQueue" \
+            -H "Content-Type: application/json" \
+            -H "x-api-token: ${TRUNK_API_TOKEN}" \
+            -d '{"repo": {"host": "github.com", "owner": "agraebe", "name": "trunk-msbuild-example"}, "targetBranch": "main"}' \
+            | python3 -m json.tool || true
+
+          echo
+          echo "## getMergeQueueTestingDetails"
+          curl -s -X POST "https://api.trunk.io:443/v1/getMergeQueueTestingDetails" \
+            -H "Content-Type: application/json" \
+            -H "x-api-token: ${TRUNK_API_TOKEN}" \
+            -d '{"repo": {"host": "github.com", "owner": "agraebe", "name": "trunk-msbuild-example"}, "targetBranch": "main"}' \
+            | python3 -m json.tool || true
+
+          if [ -n "${PR_NUMBER}" ]; then
+            echo
+            echo "## getSubmittedPullRequest (PR #${PR_NUMBER})"
+            curl -s -X POST "https://api.trunk.io:443/v1/getSubmittedPullRequest" \
+              -H "Content-Type: application/json" \
+              -H "x-api-token: ${TRUNK_API_TOKEN}" \
+              -d "{\"repo\": {\"host\": \"github.com\", \"owner\": \"agraebe\", \"name\": \"trunk-msbuild-example\"}, \"targetBranch\": \"main\", \"pr\": {\"number\": ${PR_NUMBER}}}" \
+              | python3 -m json.tool || true
+          fi
