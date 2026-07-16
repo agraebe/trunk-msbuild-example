@@ -55,3 +55,4 @@ public sealed class TelemetryBatcher
 public sealed record TelemetryEvent(string Name, IReadOnlyDictionary<string, string> Properties);
 // demo PR v2: touch Telemetry.Client for impacted-targets.yml
 // re-trigger fresh impacted-targets upload 1784225256
+// Stress 01: Telemetry.Client tweak (small lane) (1784238739912033000)
