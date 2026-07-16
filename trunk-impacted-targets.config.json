@@ -1,0 +1,17 @@
+{
+  "pathBasedRules": [
+    {
+      "pathPrefix": "data/seed/",
+      "impactedProjects": ["Common.Core"]
+    }
+  ],
+  "buildInfrastructurePaths": [
+    "Directory.Build.props",
+    "Directory.Build.targets",
+    "global.json",
+    "NuGet.config",
+    ".sln",
+    ".github/workflows/",
+    "tools/Trunk.ImpactedTargets/"
+  ]
+}

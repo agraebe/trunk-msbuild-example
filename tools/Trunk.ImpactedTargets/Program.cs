@@ -21,11 +21,14 @@ try
     Console.Error.WriteLine($"Loading MSBuild project graph from {solutionPath}...");
     var graphAnalyzer = new ProjectGraphAnalyzer(solutionPath);
 
+    Console.Error.WriteLine($"Loading path-rules config from {options.ConfigPath}...");
+    var pathRules = new PathRules(PathRulesConfig.Load(options.ConfigPath));
+
     var gitDiff = new GitDiffProvider(repoRoot);
     var changedFiles = gitDiff.GetChangedFiles(options.BaseRef, options.HeadRef);
     Console.Error.WriteLine($"{changedFiles.Count} file(s) changed between {options.BaseRef} and {options.HeadRef}.");
 
-    var calculator = new ImpactedTargetsCalculator(graphAnalyzer, repoRoot);
+    var calculator = new ImpactedTargetsCalculator(graphAnalyzer, pathRules, repoRoot);
     var result = calculator.Compute(changedFiles);
 
     object jsonPayload = result.IsAll

@@ -58,9 +58,10 @@ have, e.g. `--base HEAD~1`.
 ## Repository layout
 
 ```
-ContosoWorkspace.sln          <- one solution, everything below it
-Directory.Build.props         <- shared TFM/nullable/lang-version settings
-global.json                   <- pins the .NET 8 SDK
+ContosoWorkspace.sln                  <- one solution, everything below it
+Directory.Build.props                 <- shared TFM/nullable/lang-version settings
+global.json                           <- pins the .NET 8 SDK
+trunk-impacted-targets.config.json    <- repo-specific config the tool reads (see below)
 
 data/seed/                    <- JSON fixtures read by Common.Core at runtime
   customers.json
@@ -80,7 +81,7 @@ tests/
   .../FlakyTests.cs           <- exactly 3 across the repo, loudly commented
 
 tools/
-  Trunk.ImpactedTargets/          <- the console app (the actual deliverable)
+  Trunk.ImpactedTargets/          <- the console app; a standalone, portable unit (see below)
   Trunk.ImpactedTargets.Tests/    <- unit tests for the graph/mapping logic
 
 .github/workflows/
@@ -129,28 +130,64 @@ Reading the graph for merge-queue purposes:
   `DeviceManagement.Service`, which never references Identity.
 - A change to **data/seed/*.json** impacts `Common.Core` and therefore (via
   the same reverse-closure expansion) everything that depends on it — encoded
-  as an explicit rule since MSBuild has no idea a JSON fixture feeds a C#
-  class. See `tools/Trunk.ImpactedTargets/PathRules.cs`.
+  as an explicit rule in `trunk-impacted-targets.config.json` since MSBuild
+  has no idea a JSON fixture feeds a C# class.
 - A change to **Directory.Build.props**, the `.sln`, `global.json`, or the
   impacted-targets tool's own source is treated as impacting **everything**,
-  conservatively — see the same file for why.
+  conservatively — same config file, `buildInfrastructurePaths`.
 
 ## The impacted-targets tool
 
 `tools/Trunk.ImpactedTargets` is a plain console app, not a shell/Python
 script, because the audience is a .NET shop and it doubles as sample code to
-fork. It's split into small, single-purpose, mostly-unit-tested classes:
+fork. It's a **standalone, portable unit**: no `ProjectReference` to anything
+under `src/`, no hardcoded project names, no assumption about your monorepo's
+shape beyond "one `.sln` at the repo root." Every repo-specific fact — which
+paths feed which projects outside the MSBuild graph, which paths are build
+infrastructure — lives in one JSON config file the tool reads at runtime, not
+in code. That's the same shape as Trunk's own
+[`bazel-action`](https://github.com/trunk-io/bazel-action/tree/main/src/scripts):
+a generic engine, parameterized by config, with zero hardcoded knowledge of
+any specific workspace baked into the engine itself.
+
+It's split into small, single-purpose, mostly-unit-tested classes:
 
 | File | Responsibility |
 |---|---|
 | `MsBuildRegistration.cs` | Binds to the installed SDK's real MSBuild assemblies via `Microsoft.Build.Locator`. **Must run before any other `Microsoft.Build.*` type is touched** — see the comment in that file for the exact failure mode if you get this wrong. |
-| `ProjectGraphAnalyzer.cs` | Loads `Microsoft.Build.Graph.ProjectGraph` for the solution; maps a changed file to its owning project (longest directory-prefix match); expands a set of directly-changed projects to their full transitive **dependents** via `ProjectGraphNode.ReferencingProjects`. No git, no HTTP — unit-tested in isolation. |
-| `PathRules.cs` | The two hand-written rules for things MSBuild's graph can't see: `data/seed/*.json` → `Common.Core` (and therefore its dependents), and build-infrastructure files → everything. **This is the file you rewrite first when adapting this to a real monorepo.** |
+| `ProjectGraphAnalyzer.cs` | Loads `Microsoft.Build.Graph.ProjectGraph` for the solution; maps a changed file to its owning project (longest directory-prefix match); expands a set of directly-changed projects to their full transitive **dependents** via `ProjectGraphNode.ReferencingProjects`. Pure engine — no git, no HTTP, no repo-specific knowledge. |
+| `PathRulesConfig.cs` | Loads and models `trunk-impacted-targets.config.json` — the file that makes this tool portable. **This is what you edit when adapting this to a real monorepo, not a `.cs` file.** |
+| `PathRules.cs` | Applies a loaded `PathRulesConfig` to file paths. Pure engine — doesn't know what any of the configured names mean. |
 | `ImpactedTargetsCalculator.cs` | Combines the graph + path rules over a list of changed files into a final `ImpactedTargetsResult` (either an explicit set, or "ALL"). |
 | `GitDiffProvider.cs` | Shells out to `git diff --name-only base...head` (three-dot, so it diffs against the merge-base, not literally `base`). |
 | `TrunkApiConstants.cs` | The Trunk API contract — endpoint, headers, payload shape — isolated in one file so it's the only place to update if Trunk changes it. |
 | `TrunkApiClient.cs` | POSTs the result. |
 | `Program.cs` / `CliOptions.cs` / `TrunkEnvironment.cs` | CLI parsing and env var wiring; ties the above together. |
+
+### Dropping this into a different repo
+
+The whole point of the split above is that `tools/Trunk.ImpactedTargets/` can
+be lifted out of this repo wholesale:
+
+1. Copy the `tools/Trunk.ImpactedTargets/` directory into your solution —
+   anywhere your repo puts internal tooling — and add the `.csproj` to your
+   `.sln`.
+2. Write a `trunk-impacted-targets.config.json` at your repo root. Start from
+   this repo's copy and strip it down: an empty `pathBasedRules` array is
+   valid (you may have no non-MSBuild dependencies to encode yet), but
+   `buildInfrastructurePaths` should at minimum list your shared
+   `Directory.Build.props`/`.targets` files and `.sln`.
+3. Copy `.github/workflows/impacted-targets.yml` and adjust the checkout step
+   for your default branch name. Keep `fetch-depth: 0` and the explicit
+   `TRUNK_PR_SHA` pin — see **Common pitfalls** below before you skip either.
+4. Run `dotnet run --project <path-to-the-tool> -- --base origin/main
+   --dry-run` locally against a real diff before wiring up the live POST.
+
+Nothing else needs to change. If adapting this to your repo means editing
+`ProjectGraphAnalyzer.cs` or `ImpactedTargetsCalculator.cs`, that's a sign the
+config schema is missing something you need — extend the schema, don't
+special-case the engine. See `tools/Trunk.ImpactedTargets/README.md` for the
+full config schema reference.
 
 ### Why it fails loudly instead of returning an empty set
 
@@ -165,12 +202,14 @@ visible and gets triaged; a quietly-wrong empty array is not. See the
 
 ```
 dotnet run --project tools/Trunk.ImpactedTargets -- \
-  --base <ref> [--head <ref>] [--repo-root <path>] [--dry-run]
+  --base <ref> [--head <ref>] [--repo-root <path>] [--config <path>] [--dry-run]
 ```
 
 - `--base` (required) — e.g. `origin/main`.
 - `--head` — defaults to `HEAD`.
 - `--repo-root` — defaults to the current directory.
+- `--config` — path to the path-rules config; defaults to
+  `<repo-root>/trunk-impacted-targets.config.json`.
 - `--dry-run` — prints the JSON impact set, skips the POST.
 
 Environment variables (only required for a live POST; ignored under
@@ -264,21 +303,25 @@ first thing to rip out before turning on flaky-test detection.
 
 ## Adapting this to a real monorepo
 
-1. **`PathRules.cs` is the main thing to rewrite.** Every enterprise monorepo
-   accumulates a handful of "everything reads this" artifacts that live
-   outside the MSBuild graph — config templates, schema files, generated
-   code, shared PowerShell/bash helpers. Enumerate them explicitly the same
-   way `data/seed/` is handled here: file-path prefix → set of project names
-   to treat as directly changed. Resist making this "smart" (glob-and-guess);
-   a wrong guess here silently under-tests PRs.
-2. **The build-infrastructure "impact everything" list** needs your repo's
-   real shared files: central package management props, custom `.targets`,
-   shared CI templates, Directory.Packages.props, etc.
-3. **`ProjectGraphAnalyzer` and `ImpactedTargetsCalculator` should not need to
-   change** — they operate purely on the MSBuild graph and don't know
-   anything project-specific. If your solution has multiple `.sln` files,
-   change `Program.cs`'s `FindSolutionFile` to point at the right one (or
-   pass individual entry projects to `ProjectGraph` instead of a solution).
+1. **`trunk-impacted-targets.config.json` is the only thing you should need
+   to edit.** See "Dropping this into a different repo" above for the copy
+   steps and `tools/Trunk.ImpactedTargets/README.md` for the full schema.
+   Every enterprise monorepo accumulates a handful of "everything reads this"
+   artifacts that live outside the MSBuild graph — config templates, schema
+   files, generated code, shared PowerShell/bash helpers. Enumerate them
+   explicitly the same way `data/seed/` is handled here: file-path prefix →
+   set of project names to treat as directly changed. Resist making this
+   "smart" (glob-and-guess); a wrong guess here silently under-tests PRs.
+2. **The build-infrastructure "impact everything" list** (same config file)
+   needs your repo's real shared files: central package management props,
+   custom `.targets`, shared CI templates, `Directory.Packages.props`, etc.
+3. **The engine code should not need to change.** `ProjectGraphAnalyzer`,
+   `PathRules`, and `ImpactedTargetsCalculator` operate purely on the MSBuild
+   graph and a config object — neither knows anything project-specific. If
+   your solution has multiple `.sln` files, change `Program.cs`'s
+   `FindSolutionFile` to point at the right one (or pass individual entry
+   projects to `ProjectGraph` instead of a solution) — that's a real code
+   change, but it's the one legitimate exception to "just edit the config."
 4. **Target naming**: this repo emits MSBuild project names directly
    (`Identity.Service`). Trunk's docs describe targets as "as expressive as a
    Bazel target or a folder name" — nothing stops you from emitting a coarser
