@@ -30,4 +30,5 @@
     <Product>Contoso Workspace Platform</Product>
   </PropertyGroup>
 
+  <!-- Stress 20: build infra change (expect ALL) -->
 </Project>
