@@ -5,6 +5,7 @@ public sealed class CliOptions
     public required string BaseRef { get; init; }
     public required string HeadRef { get; init; }
     public required string RepoRoot { get; init; }
+    public required string ConfigPath { get; init; }
     public required bool DryRun { get; init; }
 
     public static CliOptions? Parse(string[] args)
@@ -12,6 +13,7 @@ public sealed class CliOptions
         string? baseRef = null;
         var headRef = "HEAD";
         var repoRoot = Directory.GetCurrentDirectory();
+        string? configPath = null;
         var dryRun = false;
 
         for (var i = 0; i < args.Length; i++)
@@ -26,6 +28,9 @@ public sealed class CliOptions
                     break;
                 case "--repo-root":
                     repoRoot = RequireValue(args, ref i, "--repo-root");
+                    break;
+                case "--config":
+                    configPath = RequireValue(args, ref i, "--config");
                     break;
                 case "--dry-run":
                     dryRun = true;
@@ -50,6 +55,7 @@ public sealed class CliOptions
             BaseRef = baseRef,
             HeadRef = headRef,
             RepoRoot = repoRoot,
+            ConfigPath = configPath ?? Path.Combine(repoRoot, "trunk-impacted-targets.config.json"),
             DryRun = dryRun,
         };
     }
@@ -68,11 +74,14 @@ public sealed class CliOptions
     public static void PrintUsage()
     {
         Console.Error.WriteLine("""
-            Usage: trunk-impacted-targets --base <ref> [--head <ref>] [--repo-root <path>] [--dry-run]
+            Usage: trunk-impacted-targets --base <ref> [--head <ref>] [--repo-root <path>] [--config <path>] [--dry-run]
 
               --base <ref>       Merge-base target, e.g. origin/main. Required.
               --head <ref>       Ref to diff against --base. Defaults to HEAD.
               --repo-root <path> Repository root. Defaults to the current directory.
+              --config <path>    Path to the path-rules config (see README.md in this
+                                  directory for the schema). Defaults to
+                                  <repo-root>/trunk-impacted-targets.config.json.
               --dry-run          Print the impacted-targets JSON but skip the POST to Trunk.
 
             Environment variables (required unless --dry-run):

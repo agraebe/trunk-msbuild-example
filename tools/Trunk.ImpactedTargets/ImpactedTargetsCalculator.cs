@@ -17,11 +17,13 @@ public sealed record ImpactedTargetsResult(bool IsAll, IReadOnlySet<string> Targ
 public sealed class ImpactedTargetsCalculator
 {
     private readonly ProjectGraphAnalyzer _graphAnalyzer;
+    private readonly PathRules _pathRules;
     private readonly string _repoRoot;
 
-    public ImpactedTargetsCalculator(ProjectGraphAnalyzer graphAnalyzer, string repoRoot)
+    public ImpactedTargetsCalculator(ProjectGraphAnalyzer graphAnalyzer, PathRules pathRules, string repoRoot)
     {
         _graphAnalyzer = graphAnalyzer;
+        _pathRules = pathRules;
         _repoRoot = repoRoot;
     }
 
@@ -32,19 +34,21 @@ public sealed class ImpactedTargetsCalculator
         foreach (var file in changedFiles)
         {
             // Rule: build infrastructure changes conservatively impact everything.
-            // See PathRules.BuildInfrastructurePaths for why this is deliberate,
+            // See the config's buildInfrastructurePaths for why this is deliberate,
             // not laziness — an empty/wrong answer under-tests the PR.
-            if (PathRules.IsBuildInfrastructurePath(file))
+            if (_pathRules.IsBuildInfrastructurePath(file))
             {
                 return ImpactedTargetsResult.All;
             }
 
-            // Rule: seed data isn't a ProjectReference edge, so encode it explicitly.
-            if (PathRules.IsSeedDataPath(file))
+            // Rule: path-based rules cover repo artifacts that affect projects
+            // without being a ProjectReference edge (seed data, shared config, etc.)
+            var directHits = _pathRules.GetDirectlyImpactedProjects(file).ToList();
+            if (directHits.Count > 0)
             {
-                foreach (var root in PathRules.SeedDataDirectRoots)
+                foreach (var project in directHits)
                 {
-                    directlyChangedProjects.Add(root);
+                    directlyChangedProjects.Add(project);
                 }
 
                 continue;
