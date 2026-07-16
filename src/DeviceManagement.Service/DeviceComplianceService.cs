@@ -40,3 +40,4 @@ public sealed class DeviceComplianceService
     public IReadOnlyList<Device> ListForCustomer(string customerId) =>
         _devices.Where(d => d.CustomerId == customerId).ToList();
 }
+// Stress 07: DeviceManagement.Service tweak (1784238740305948000)
