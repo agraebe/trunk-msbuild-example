@@ -19,3 +19,4 @@ public readonly struct Result<T>
 
     public static Result<T> Failure(string error) => new(false, default, error);
 }
+// Stress 12: Common.Core tweak (fans out to everything) (1784238740643490000)
