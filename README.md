@@ -335,3 +335,4 @@ first thing to rip out before turning on flaky-test detection.
    differences (locale, timezone, filesystem case-sensitivity) are other
    common ones worth deliberately seeding once you've adopted Trunk's flaky
    detection, so you have known-good signal to validate against.
+// Stress 19: README-only change (expect empty impact set)
