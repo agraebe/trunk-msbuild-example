@@ -183,6 +183,22 @@ workflow doesn't have to redundantly wire them up:
 | `TRUNK_PR_SHA` | `GITHUB_SHA` | head commit SHA |
 | `TRUNK_TARGET_BRANCH` | `GITHUB_BASE_REF`, then `--base` | merge target branch |
 
+> **Gotcha, confirmed the hard way in this repo's own CI**: don't rely on the
+> `GITHUB_SHA` fallback for `TRUNK_PR_SHA` in a `pull_request`-triggered
+> workflow. GitHub Actions sets `GITHUB_SHA` to the *ephemeral merge commit*
+> (`refs/pull/N/merge`) for that event type, not the PR branch's real head
+> commit. Trunk's merge-queue readiness check (`getSubmittedPullRequest`,
+> `readiness.hasImpactedTargets`) keys uploaded impacted targets to the PR's
+> actual head SHA. Upload under the merge-commit SHA instead and every POST
+> still returns `200 OK` — Trunk accepts and stores it — but the queue's
+> readiness check never finds it, because it's filed under a SHA the PR
+> record doesn't track. The fix: explicitly set `TRUNK_PR_SHA` (or
+> `--head`'s value) to `github.event.pull_request.head.sha`, as
+> `.github/workflows/impacted-targets.yml` does. This is the kind of bug that
+> looks like a Trunk-side problem — clean success responses, no errors
+> anywhere — until you compare the exact SHA in the request against the exact
+> SHA in `getSubmittedPullRequest`'s response and notice they don't match.
+
 ### The Trunk API contract this tool calls
 
 Fetched and verified from `docs.trunk.io` while building this example
@@ -278,3 +294,10 @@ first thing to rip out before turning on flaky-test detection.
   change produced the full dependent closure; a `data/seed/*.json` change
   produced the seed-rule's project set. See the verification transcript in
   the PR/session that produced this repo for the exact JSON output of each.
+- Live end-to-end against a real Trunk org and GitHub repo: three PRs (one
+  per scenario above) posted impacted targets to the real
+  `setImpactedTargets` endpoint, entered Trunk's actual Merge Queue, and
+  produced the expected lane graph — the FeatureFlags and Telemetry.Client
+  PRs tested in parallel (no shared impacted targets), while the seed-data PR
+  (impacting everything) stacked on top of both, exactly as designed. This
+  also surfaced and fixed a real bug: see the `TRUNK_PR_SHA` gotcha above.
