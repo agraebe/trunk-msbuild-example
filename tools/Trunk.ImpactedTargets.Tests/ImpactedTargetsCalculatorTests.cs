@@ -8,7 +8,8 @@ public class ImpactedTargetsCalculatorTests
     {
         var repoRoot = RepoRootLocator.Find();
         var analyzer = new ProjectGraphAnalyzer(RepoRootLocator.FindSolutionFile());
-        return new ImpactedTargetsCalculator(analyzer, repoRoot);
+        var config = PathRulesConfig.Load(Path.Combine(repoRoot, "trunk-impacted-targets.config.json"));
+        return new ImpactedTargetsCalculator(analyzer, new PathRules(config), repoRoot);
     }
 
     [Fact]

@@ -1,63 +1,57 @@
 namespace Trunk.ImpactedTargets;
 
 /// <summary>
-/// Hand-written rules for mapping repo paths to impacted targets that MSBuild's
-/// project graph cannot see, because they aren't .csproj/ProjectReference edges at
-/// all. This is the piece a real adoption has to customize the most — every
-/// enterprise monorepo has a handful of "everything reads this" files that live
-/// outside the build graph (seed data, shared config, generated schemas, etc.).
+/// Applies a <see cref="PathRulesConfig"/> to repo-relative file paths. This class
+/// is pure engine — it has no idea what "Common.Core" or "data/seed/" mean, it just
+/// evaluates whatever rules the config hands it. That's deliberate: this is the
+/// class you keep unmodified when reusing this tool in a different repo. All the
+/// repo-specific knowledge lives in the config file this loads (see
+/// PathRulesConfig.cs and the README in this directory).
 ///
-/// Keep this list short and explicit. Resist the urge to make it "smart" (e.g.
-/// pattern-matching on file content) — a wrong guess here silently under-tests a
-/// PR, which is worse than a human maintaining an explicit list.
+/// Keep the config short and explicit. Resist the urge to make matching "smart"
+/// (e.g. pattern-matching on file content) — a wrong guess here silently
+/// under-tests a PR, which is worse than a human maintaining an explicit list.
 /// </summary>
-public static class PathRules
+public sealed class PathRules
 {
-    /// <summary>
-    /// Rule 1 — seed data. data/seed/*.json is read at runtime by
-    /// Common.Core.SeedDataLoader, so any project that transitively depends on
-    /// Common.Core is potentially affected by a seed-data change, even though no
-    /// .csproj references the JSON files. We approximate "depends on Common.Core"
-    /// by hard-coding the known seed consumers here; the graph analyzer expands
-    /// each one to its full dependent closure exactly as it would for a normal
-    /// project change.
-    /// </summary>
-    public static readonly string SeedDataDirectory = "data/seed/";
+    private readonly PathRulesConfig _config;
 
-    public static readonly IReadOnlyList<string> SeedDataDirectRoots = new[]
+    public PathRules(PathRulesConfig config)
     {
-        "Common.Core",
-    };
+        _config = config;
+    }
 
     /// <summary>
-    /// Rule 2 — build infrastructure. Changes to these paths can alter how *every*
-    /// project builds or tests, so we conservatively mark the whole repo impacted
-    /// rather than trying to reason about which projects are "really" affected.
-    /// An empty/wrong impact set would let the merge queue under-test a PR that
-    /// changes shared build behavior — a loud, maximal answer is the safe default.
+    /// Returns the project names directly impacted by a change at
+    /// <paramref name="repoRelativePath"/> via path-based rules (e.g. seed data),
+    /// or an empty sequence if no rule matches. Does not expand to dependents —
+    /// that's <see cref="ProjectGraphAnalyzer.ExpandToDependents"/>'s job.
     /// </summary>
-    public static readonly IReadOnlyList<string> BuildInfrastructurePaths = new[]
+    public IEnumerable<string> GetDirectlyImpactedProjects(string repoRelativePath)
     {
-        "Directory.Build.props",
-        "Directory.Build.targets",
-        "global.json",
-        "NuGet.config",
-        ".sln",
-        ".github/workflows/",
-        "tools/Trunk.ImpactedTargets/",
-    };
+        var normalized = Normalize(repoRelativePath);
 
-    public static bool IsSeedDataPath(string repoRelativePath) =>
-        repoRelativePath.Replace('\\', '/').StartsWith(SeedDataDirectory, StringComparison.OrdinalIgnoreCase);
+        foreach (var rule in _config.PathBasedRules)
+        {
+            if (normalized.StartsWith(Normalize(rule.PathPrefix), StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var project in rule.ImpactedProjects)
+                {
+                    yield return project;
+                }
+            }
+        }
+    }
 
-    public static bool IsBuildInfrastructurePath(string repoRelativePath)
+    public bool IsBuildInfrastructurePath(string repoRelativePath)
     {
-        var normalized = repoRelativePath.Replace('\\', '/');
-        foreach (var marker in BuildInfrastructurePaths)
+        var normalized = Normalize(repoRelativePath);
+
+        foreach (var marker in _config.BuildInfrastructurePaths)
         {
             if (marker.EndsWith('/'))
             {
-                if (normalized.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+                if (normalized.StartsWith(Normalize(marker), StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
@@ -70,4 +64,6 @@ public static class PathRules
 
         return false;
     }
+
+    private static string Normalize(string path) => path.Replace('\\', '/');
 }

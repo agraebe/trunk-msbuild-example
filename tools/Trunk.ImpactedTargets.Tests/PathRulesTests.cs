@@ -2,20 +2,43 @@ using Xunit;
 
 namespace Trunk.ImpactedTargets.Tests;
 
+/// <summary>
+/// Tests PathRules against a synthetic in-memory config, not this repo's real
+/// trunk-impacted-targets.config.json — PathRules is generic engine code, and
+/// these tests should keep passing unmodified even if Contoso's config changes.
+/// See ImpactedTargetsCalculatorTests for tests against the real repo config.
+/// </summary>
 public class PathRulesTests
 {
+    private static PathRules CreateRules() => new(new PathRulesConfig
+    {
+        PathBasedRules = new List<PathBasedRule>
+        {
+            new() { PathPrefix = "data/seed/", ImpactedProjects = new List<string> { "Common.Core" } },
+        },
+        BuildInfrastructurePaths = new List<string>
+        {
+            "Directory.Build.props",
+            "global.json",
+            ".sln",
+            ".github/workflows/",
+        },
+    });
+
     [Theory]
     [InlineData("data/seed/customers.json")]
     [InlineData("data/seed/devices.json")]
-    public void IsSeedDataPath_MatchesFilesUnderSeedDirectory(string path)
+    public void GetDirectlyImpactedProjects_MatchesFilesUnderConfiguredPrefix(string path)
     {
-        Assert.True(PathRules.IsSeedDataPath(path));
+        var rules = CreateRules();
+        Assert.Equal(new[] { "Common.Core" }, rules.GetDirectlyImpactedProjects(path));
     }
 
     [Fact]
-    public void IsSeedDataPath_DoesNotMatchUnrelatedPath()
+    public void GetDirectlyImpactedProjects_DoesNotMatchUnrelatedPath()
     {
-        Assert.False(PathRules.IsSeedDataPath("src/Common.Core/SeedDataLoader.cs"));
+        var rules = CreateRules();
+        Assert.Empty(rules.GetDirectlyImpactedProjects("src/Common.Core/SeedDataLoader.cs"));
     }
 
     [Theory]
@@ -23,15 +46,24 @@ public class PathRulesTests
     [InlineData("global.json")]
     [InlineData("ContosoWorkspace.sln")]
     [InlineData(".github/workflows/tests.yml")]
-    [InlineData("tools/Trunk.ImpactedTargets/Program.cs")]
-    public void IsBuildInfrastructurePath_MatchesKnownInfraFiles(string path)
+    public void IsBuildInfrastructurePath_MatchesConfiguredMarkers(string path)
     {
-        Assert.True(PathRules.IsBuildInfrastructurePath(path));
+        var rules = CreateRules();
+        Assert.True(rules.IsBuildInfrastructurePath(path));
     }
 
     [Fact]
     public void IsBuildInfrastructurePath_DoesNotMatchOrdinaryServiceFile()
     {
-        Assert.False(PathRules.IsBuildInfrastructurePath("src/Identity.Service/IdentityVerifier.cs"));
+        var rules = CreateRules();
+        Assert.False(rules.IsBuildInfrastructurePath("src/Identity.Service/IdentityVerifier.cs"));
+    }
+
+    [Fact]
+    public void GetDirectlyImpactedProjects_EmptyConfig_MatchesNothing()
+    {
+        var rules = new PathRules(new PathRulesConfig());
+        Assert.Empty(rules.GetDirectlyImpactedProjects("data/seed/customers.json"));
+        Assert.False(rules.IsBuildInfrastructurePath("Directory.Build.props"));
     }
 }
