@@ -73,3 +73,4 @@ public static class SessionIdGenerator
 
     public static int Next() => Interlocked.Increment(ref _current);
 }
+// Stress 15: touch shared-state flake file directly (1784238740841731000)
