@@ -1,6 +1,26 @@
 [
-  { "id": "cust-001", "name": "Initech Manufacturing", "tier": "Enterprise", "seats": 4200 },
-  { "id": "cust-002", "name": "Globex Retail", "tier": "Growth", "seats": 850 },
-  { "id": "cust-003", "name": "Umbrella Logistics", "tier": "Enterprise", "seats": 6100 }
+  {
+    "id": "cust-001",
+    "name": "Initech Manufacturing",
+    "tier": "Enterprise",
+    "seats": 4200
+  },
+  {
+    "id": "cust-002",
+    "name": "Globex Retail",
+    "tier": "Growth",
+    "seats": 850
+  },
+  {
+    "id": "cust-003",
+    "name": "Umbrella Logistics",
+    "tier": "Enterprise",
+    "seats": 6100
+  },
+  {
+    "id": "cust-004",
+    "name": "Stress Test Corp",
+    "tier": "Growth",
+    "seats": 120
+  }
 ]
-// Stress 13: seed data tweak (custom path rule) (1784238740708289000)
