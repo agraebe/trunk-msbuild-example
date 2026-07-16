@@ -1,22 +1,22 @@
 # trunk-msbuild-example
 
-A worked example of feeding Trunk Merge Queue's dynamic parallel lanes from an
-MSBuild/.NET monorepo. Bazel and Nx have first-party impacted-target
-integrations with Trunk; MSBuild does not, so this repo is the reference
-implementation for that gap. Written for a senior platform engineer deciding
-whether/how to wire this into a real monorepo — no marketing, ~15 minutes to
-read.
+A reference implementation for feeding Trunk Merge Queue's dynamic parallel
+lanes from an MSBuild/.NET monorepo. Trunk has first-party impacted-target
+integrations for Bazel and Nx; for everything else — including MSBuild — Trunk
+exposes a plain HTTP API and expects you to bring your own graph analysis.
+This repo is that implementation: a small but structurally realistic .NET
+monorepo, a console tool that computes impacted targets from MSBuild's own
+static project graph, and the GitHub Actions wiring to run it on every PR.
 
 ## What this demonstrates
 
 1. A small but structurally interesting .NET monorepo (6 src projects, 6 test
    projects, one console tool) with a real MSBuild project-reference graph.
 2. **The money shot**: a PR touching the shared feature-flag library
-   (`Common.FeatureFlags`) has to be treated as impacting almost every
-   service — one merge-queue lane, no parallelism. A PR touching the
-   isolated `Telemetry.Client` fans out into a tiny, cheap lane. Same repo,
-   same tool, wildly different blast radius, computed automatically from the
-   graph MSBuild already knows.
+   (`Common.FeatureFlags`) impacts almost every service — one merge-queue
+   lane, no parallelism. A PR touching the isolated `Telemetry.Client` fans
+   out into a tiny, cheap lane. Same repo, same tool, wildly different blast
+   radius, computed automatically from the graph MSBuild already knows.
 3. A console tool (`tools/Trunk.ImpactedTargets`) that uses
    `Microsoft.Build.Graph.ProjectGraph` — the same static graph engine behind
    `msbuild -graph` — to turn a git diff into an impacted-target list and
@@ -24,7 +24,11 @@ read.
 4. Real JUnit XML output from xUnit, including three tests that are
    *intentionally* flaky, one per common flake class, wired up for Trunk's
    flaky-test detection to find.
-5. GitHub Actions workflows showing where both pieces run in CI.
+5. GitHub Actions workflows showing where both pieces run in CI, verified
+   against a live Trunk org: PRs post impacted targets, enter the real Merge
+   Queue, and produce the expected lane graph (parallel lanes for
+   non-overlapping changes, a single stacked lane when a change touches
+   everything).
 
 ## Prerequisites
 
@@ -48,8 +52,8 @@ dotnet test tests/Identity.Service.Tests --logger "junit;LogFilePath=junit.xml"
 dotnet run --project tools/Trunk.ImpactedTargets -- --base origin/main --dry-run
 ```
 
-If you don't have an `origin/main` locally (this repo isn't pushed anywhere
-yet), use any two commits/branches you have, e.g. `--base HEAD~1`.
+If you don't have an `origin/main` locally, use any two commits/branches you
+have, e.g. `--base HEAD~1`.
 
 ## Repository layout
 
@@ -144,7 +148,7 @@ fork. It's split into small, single-purpose, mostly-unit-tested classes:
 | `PathRules.cs` | The two hand-written rules for things MSBuild's graph can't see: `data/seed/*.json` → `Common.Core` (and therefore its dependents), and build-infrastructure files → everything. **This is the file you rewrite first when adapting this to a real monorepo.** |
 | `ImpactedTargetsCalculator.cs` | Combines the graph + path rules over a list of changed files into a final `ImpactedTargetsResult` (either an explicit set, or "ALL"). |
 | `GitDiffProvider.cs` | Shells out to `git diff --name-only base...head` (three-dot, so it diffs against the merge-base, not literally `base`). |
-| `TrunkApiConstants.cs` | The Trunk API contract — endpoint, headers, payload shape — isolated in one file, verified against Trunk's published docs (see below) rather than guessed. |
+| `TrunkApiConstants.cs` | The Trunk API contract — endpoint, headers, payload shape — isolated in one file so it's the only place to update if Trunk changes it. |
 | `TrunkApiClient.cs` | POSTs the result. |
 | `Program.cs` / `CliOptions.cs` / `TrunkEnvironment.cs` | CLI parsing and env var wiring; ties the above together. |
 
@@ -180,13 +184,10 @@ workflow doesn't have to redundantly wire them up:
 | `TRUNK_REPO_OWNER` / `TRUNK_REPO_NAME` | parsed from `GITHUB_REPOSITORY` | repo identity |
 | `TRUNK_REPO_HOST` | `github.com` | repo identity |
 | `TRUNK_PR_NUMBER` | — | PR number |
-| `TRUNK_PR_SHA` | `GITHUB_SHA` | head commit SHA |
+| `TRUNK_PR_SHA` | `GITHUB_SHA` | head commit SHA — see the pitfall below before relying on the fallback |
 | `TRUNK_TARGET_BRANCH` | `GITHUB_BASE_REF`, then `--base` | merge target branch |
 
 ### The Trunk API contract this tool calls
-
-Fetched and verified from `docs.trunk.io` while building this example
-(`merge-queue/optimizations/parallel-queues/api`), not invented from memory:
 
 ```
 POST https://api.trunk.io:443/v1/setImpactedTargets
@@ -196,16 +197,42 @@ x-forked-workflow-run-id: <run id>    (forked PRs, instead of a token)
 
 {
   "repo": { "host": "github.com", "owner": "...", "name": "..." },
-  "pr": { "number": 123, "sha": "..." },
+  "pr": { "number": "123", "sha": "..." },
   "targetBranch": "main",
   "impactedTargets": ["Identity.Service", "AppDelivery.Service"]   // or the literal string "ALL"
 }
 ```
 
-The JUnit upload step uses `trunk-io/analytics-uploader@v2` (documented at
-`flaky-tests/get-started/ci-providers/github-actions`), which wraps the
+`pr.number` is a JSON **string**, not an integer — match Trunk's own
+reference client (`trunk-io/bazel-action`, `upload_impacted_targets.sh`,
+which builds this field with `jq --arg`) rather than what the field name
+suggests.
+
+The JUnit upload step uses `trunk-io/analytics-uploader@v2`, which wraps the
 `trunk-analytics-cli upload --junit-paths <glob> --org-url-slug <slug> --token
-<token>` CLI invocation documented at `flaky-tests/reference/cli-reference`.
+<token>` CLI.
+
+### Common pitfalls
+
+**`pr.sha` must be the PR's real head commit, not `GITHUB_SHA`.** For
+`pull_request`-triggered workflows, GitHub Actions sets `GITHUB_SHA` to the
+*ephemeral merge commit* (`refs/pull/N/merge`), not the PR branch's actual
+head commit. Trunk's merge-queue readiness check
+(`getSubmittedPullRequest.readiness.hasImpactedTargets`) keys uploaded
+impacted targets to the PR's real head SHA. Upload under the merge-commit SHA
+instead and `setImpactedTargets` still returns `200 OK` — Trunk accepts and
+stores the payload — but the queue's readiness check never finds it, because
+it's filed under a SHA the PR record doesn't track. The PR sits in "Waiting
+to Enter Queue" indefinitely with no error anywhere. Set `TRUNK_PR_SHA` (or
+the `--head` argument) explicitly to `github.event.pull_request.head.sha`, as
+`.github/workflows/impacted-targets.yml` does — don't rely on the
+`GITHUB_SHA` fallback for this event type.
+
+If a PR looks stuck in "Not Ready" with GitHub reporting the PR as mergeable
+and all checks green, compare the exact SHA in your last `setImpactedTargets`
+request against the `prSha` field in a `getSubmittedPullRequest` response for
+that PR (`POST /v1/getSubmittedPullRequest`, same repo/pr/targetBranch
+shape). A mismatch there is the tell.
 
 ## Tests, including the flaky ones
 
@@ -217,8 +244,7 @@ dotnet test <project> --logger "junit;LogFilePath=junit.xml"
 
 That produces a real `junit.xml` next to the project — this is what
 `.github/workflows/tests.yml` globs up with `**/junit.xml` and hands to
-`trunk-io/analytics-uploader@v2`. It is not a placeholder; run the command
-yourself and open the file.
+`trunk-io/analytics-uploader@v2`.
 
 **Exactly three tests in this repo are intentionally flaky**, each in a file
 named `FlakyTests.cs` with a loud banner comment, each demonstrating a
@@ -228,7 +254,7 @@ distinct real-world flake class:
 |---|---|---|
 | `DeviceManagement.Service.Tests` | Random failure | Unseeded `Guid.NewGuid()` roll; fails ~25% of runs by genuine chance, not a hidden fixed seed. |
 | `AppDelivery.Service.Tests` | Timing / tight timeout | Races real async work against a timeout tight enough to lose under CI load — the same shape as a Playwright test waiting on a selector. |
-| `Identity.Service.Tests` | Shared mutable state / order dependency | Two tests read-and-increment the same static counter, each assuming it runs first. |
+| `Identity.Service.Tests` | Shared mutable state / race condition | Two test classes race a shared static counter, synchronized via a `Barrier` so the interleaving is real OS-scheduling nondeterminism, not build-order luck — each test flips between pass and fail across runs. |
 
 **There are no retries anywhere in this repo** — not in the test projects,
 not in the GitHub Actions workflows. Retrying a flaky test on failure hides
@@ -266,15 +292,3 @@ first thing to rip out before turning on flaky-test detection.
    differences (locale, timezone, filesystem case-sensitivity) are other
    common ones worth deliberately seeding once you've adopted Trunk's flaky
    detection, so you have known-good signal to validate against.
-
-## What was verified before calling this done
-
-- `dotnet build ContosoWorkspace.sln` — clean build, all 13 projects.
-- Full test suite run 5× — deterministic tests passed 5/5 every time; the
-  flaky tests flipped at least once each across the 5 runs.
-- `--dry-run` against three synthetic diffs (scratch commit, tool run,
-  `git reset` back): a `Telemetry.Client` change produced exactly
-  `["Telemetry.Client", "Telemetry.Client.Tests"]`; a `Common.FeatureFlags`
-  change produced the full dependent closure; a `data/seed/*.json` change
-  produced the seed-rule's project set. See the verification transcript in
-  the PR/session that produced this repo for the exact JSON output of each.
