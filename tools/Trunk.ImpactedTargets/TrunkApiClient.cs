@@ -29,7 +29,12 @@ public sealed class TrunkApiClient
     {
         var payload = new SetImpactedTargetsRequest(
             new RepoPayload(repo.Host, repo.Owner, repo.Name),
-            new PullRequestPayload(pullRequest.Number, pullRequest.Sha),
+            // Trunk's own reference client (trunk-io/bazel-action, upload_impacted_targets.sh)
+            // builds this field with `jq --arg number "${PR_NUMBER}"`, which always emits a JSON
+            // string. Sending a JSON integer here is accepted by the write endpoint (200 OK) but
+            // apparently doesn't key-match the PR record the merge-queue readiness engine already
+            // has from the GitHub webhook — send it as a string to match the known-working client.
+            new PullRequestPayload(pullRequest.Number.ToString(), pullRequest.Sha),
             targetBranch,
             result.IsAll ? "ALL" : result.Targets.OrderBy(t => t, StringComparer.Ordinal).ToArray());
 
@@ -85,5 +90,5 @@ public sealed class TrunkApiClient
 
     private sealed record RepoPayload(string Host, string Owner, string Name);
 
-    private sealed record PullRequestPayload(int Number, string Sha);
+    private sealed record PullRequestPayload(string Number, string Sha);
 }
