@@ -67,3 +67,4 @@ public class PathRulesTests
         Assert.False(rules.IsBuildInfrastructurePath("Directory.Build.props"));
     }
 }
+// Stress 18: tool's own test project (isolated lane) (1784238741039551000)
