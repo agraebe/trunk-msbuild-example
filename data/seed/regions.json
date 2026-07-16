@@ -1,5 +1,22 @@
 [
-  { "code": "us-east", "displayName": "US East", "defaultForNewCustomers": true },
-  { "code": "eu-west", "displayName": "EU West", "defaultForNewCustomers": false },
-  { "code": "ap-south", "displayName": "AP South", "defaultForNewCustomers": false }
+  {
+    "code": "us-east",
+    "displayName": "US East",
+    "defaultForNewCustomers": true
+  },
+  {
+    "code": "eu-west",
+    "displayName": "EU West",
+    "defaultForNewCustomers": false
+  },
+  {
+    "code": "ap-south",
+    "displayName": "AP South",
+    "defaultForNewCustomers": false
+  },
+  {
+    "code": "stress-test",
+    "displayName": "Stress Test Region",
+    "defaultForNewCustomers": false
+  }
 ]
