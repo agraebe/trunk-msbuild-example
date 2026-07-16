@@ -31,3 +31,4 @@ public class FlakyTests
         Assert.True(normalized >= 25, $"Simulated heartbeat missed its budget (roll={normalized}).");
     }
 }
+// Stress 16: touch random-failure flake file directly (1784238740908008000)
