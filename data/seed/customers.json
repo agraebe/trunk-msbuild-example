@@ -16,11 +16,5 @@
     "name": "Umbrella Logistics",
     "tier": "Enterprise",
     "seats": 6100
-  },
-  {
-    "id": "cust-004",
-    "name": "Stress Test Corp",
-    "tier": "Growth",
-    "seats": 120
   }
 ]
