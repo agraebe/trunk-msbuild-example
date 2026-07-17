@@ -27,9 +27,20 @@ jobs:
       # NO retry flag anywhere in this job — Trunk's flaky-test detection needs the
       # raw pass/fail signal from every run; a retry would mask exactly the flakes
       # this repo's FlakyTests.cs files exist to demonstrate.
+      #
+      # `continue-on-error: true` + capturing `id: test`'s outcome (rather than a
+      # blanket `|| true` swallowing the result) is what makes quarantine actually
+      # mean something: the real pass/fail signal survives into `steps.test.outcome`
+      # and gets handed to the upload step below, which is the one place that
+      # decides whether a failure was a known-quarantined flake (job stays green)
+      # or a genuine regression (job fails for real). A blanket `|| true` here would
+      # make every test failure invisible to that decision — quarantine would have
+      # nothing to override, but so would every real bug.
       - name: Test (with JUnit output)
+        id: test
+        continue-on-error: true
         run: |
-          set -e
+          failed=0
           for proj in \
             tests/Common.Core.Tests \
             tests/Common.FeatureFlags.Tests \
@@ -39,19 +50,27 @@ jobs:
             tests/Telemetry.Client.Tests \
             tools/Trunk.ImpactedTargets.Tests; do
             dotnet test "$proj" --no-build --configuration Release \
-              --logger "junit;LogFilePath=junit.xml" || true
+              --logger "junit;LogFilePath=junit.xml" || failed=1
           done
-        # `|| true`: a failing (including flaky) test must not stop this step —
-        # the whole point is to still upload the JUnit results below.
+          exit "$failed"
 
       # Runs even if the job above reports test failures (`!cancelled()` covers
       # both success and failure, only skipping on manual cancellation). Flaky
       # detection is useless if the upload only happens on green runs.
+      #
+      # `quarantine: true` + `previous-step-outcome` is the actual quarantine
+      # integration: the action checks whether every failure in this run matches a
+      # test Trunk has already quarantined for this repo. If so, it exits 0 and the
+      # job stays green despite `steps.test.outcome` being "failure". If any failure
+      # is NOT quarantined (a new flake, or a genuine regression), it propagates
+      # that failure and the job fails for real. No `continue-on-error` here — this
+      # step's exit code is the final, authoritative word on whether the job passed.
       - name: Upload Test Results to Trunk.io
         if: ${{ !cancelled() }}
-        continue-on-error: true
         uses: trunk-io/analytics-uploader@v2
         with:
           junit-paths: "**/junit.xml"
           org-slug: ${{ vars.TRUNK_ORG_URL_SLUG }}
           token: ${{ secrets.TRUNK_API_TOKEN }}
+          quarantine: true
+          previous-step-outcome: ${{ steps.test.outcome }}
